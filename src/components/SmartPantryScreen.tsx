@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Camera, Search, Plus, AlertCircle, Clock, Sparkles, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
@@ -84,12 +84,49 @@ export function SmartPantryScreen() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   
   // Form state for manual add
   const [newItemName, setNewItemName] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newItemExpiry, setNewItemExpiry] = useState("");
+
+  // Start camera when dialog opens
+  useEffect(() => {
+    if (cameraOpen && !scanning) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+    
+    return () => {
+      stopCamera();
+    };
+  }, [cameraOpen]);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      });
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error('Camera access error:', error);
+      toast.error('Unable to access camera. Using simulation mode.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+  };
 
   const getExpiryBadge = (days: number) => {
     if (days <= 1) {
@@ -294,12 +331,21 @@ export function SmartPantryScreen() {
           <div className="space-y-4">
             <div className="aspect-[4/3] bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
               {scanning ? (
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20 animate-pulse">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20 animate-pulse z-10">
                   <div className="flex flex-col items-center justify-center h-full">
                     <Sparkles className="h-12 w-12 text-white mb-3 animate-pulse" />
                     <p className="text-white">AI Scanning...</p>
                   </div>
                 </div>
+              ) : null}
+              {cameraStream ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <Camera className="h-16 w-16 text-gray-600" />
               )}

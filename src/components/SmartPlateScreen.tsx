@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Camera, TrendingDown, Award, Sparkles } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
@@ -68,11 +68,48 @@ export function SmartPlateScreen() {
   const [scanStep, setScanStep] = useState<"before" | "after" | "analyzing">("before");
   const [beforeImage, setBeforeImage] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState("");
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   
   const wasteScore = 72;
   const weeklyWaste = mockWasteData.reduce((sum, day) => sum + day.waste, 0);
   const avgDaily = Math.round(weeklyWaste / 7);
   const improvement = 15;
+
+  // Start camera when dialog opens
+  useEffect(() => {
+    if (cameraOpen && scanStep !== "analyzing") {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+    
+    return () => {
+      stopCamera();
+    };
+  }, [cameraOpen, scanStep]);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      });
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error('Camera access error:', error);
+      toast.error('Unable to access camera. Using simulation mode.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+  };
 
   const handleCameraClick = () => {
     setCameraOpen(true);
@@ -318,26 +355,33 @@ export function SmartPlateScreen() {
             
             <div className="aspect-[4/3] bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
               {scanStep === "analyzing" ? (
-                <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-blue-500/20 animate-pulse">
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-blue-500/20 animate-pulse z-10">
                   <div className="flex flex-col items-center justify-center h-full">
                     <Sparkles className="h-12 w-12 text-white mb-3 animate-pulse" />
                     <p className="text-white">Analyzing waste...</p>
                   </div>
                 </div>
-              ) : (
-                <>
-                  <Camera className="h-16 w-16 text-gray-600" />
-                  {beforeImage && scanStep === "before" && (
-                    <div className="absolute top-3 right-3">
-                      <Badge className="bg-green-500">✓ Photo Taken</Badge>
-                    </div>
-                  )}
-                  {scanStep === "after" && (
-                    <div className="absolute top-3 left-3">
-                      <Badge variant="secondary">Before photo saved</Badge>
-                    </div>
-                  )}
-                </>
+              ) : null}
+              {cameraStream && scanStep !== "analyzing" ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+              ) : scanStep !== "analyzing" ? (
+                <Camera className="h-16 w-16 text-gray-600" />
+              ) : null}
+              {beforeImage && scanStep === "before" && (
+                <div className="absolute top-3 right-3 z-20">
+                  <Badge className="bg-green-500">✓ Photo Taken</Badge>
+                </div>
+              )}
+              {scanStep === "after" && (
+                <div className="absolute top-3 left-3 z-20">
+                  <Badge variant="secondary">Before photo saved</Badge>
+                </div>
               )}
             </div>
             
